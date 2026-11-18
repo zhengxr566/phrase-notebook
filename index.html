@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="短句拆解本">
+<meta name="robots" content="noindex">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="apple-touch-icon.png">
+<title>短句拆解本</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Layout: sticky tab bar; analyze view = sentence workbench + phrase ladders side by side, stacking on phones */
+:root{
+  --bg:#f4f5f1; --panel:#ffffff; --ink:#1d2421; --muted:#66706b; --line:#dfe3dc;
+  --accent:#2c6b58; --accent-weak:#e1eee8; --on-accent:#ffffff;
+  --hl:#fff0b3; --hl-line:#d9a800; --add:#d3efdb; --add-ink:#17602c; --miss:#fbe0de; --danger:#b42318;
+  --f-ui:"Inter","Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-en:"Source Serif 4",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151917; --panel:#1d2321; --ink:#e6ebe8; --muted:#97a29c; --line:#323a36;
+  --accent:#72c7a9; --accent-weak:#1f3a31; --on-accent:#0f1a16;
+  --hl:#4a3e0e; --hl-line:#d6a800; --add:#1c3d27; --add-ink:#92e2a8; --miss:#4a2323; --danger:#ff8a80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151917; --panel:#1d2321; --ink:#e6ebe8; --muted:#97a29c; --line:#323a36;
+  --accent:#72c7a9; --accent-weak:#1f3a31; --on-accent:#0f1a16;
+  --hl:#4a3e0e; --hl-line:#d6a800; --add:#1c3d27; --add-ink:#92e2a8; --miss:#4a2323; --danger:#ff8a80; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-ui)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--panel);border-bottom:1px solid var(--line);
+  padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hbar{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:600}
+nav{display:flex;gap:2px;flex-wrap:wrap}
+nav button{border:0;background:none;padding:6px 10px;border-radius:8px;color:var(--muted);cursor:pointer;font:inherit}
+nav button.on{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.sync{margin-left:auto;font:inherit;font-size:12px;color:var(--muted);white-space:nowrap;border:0;background:none;cursor:pointer;padding:4px 6px;border-radius:6px}
+.sync:hover{background:var(--bg)}
+.sync.ok::before{content:"● ";color:var(--accent)} .sync.bad::before{content:"● ";color:var(--danger)}
+main{max-width:1200px;margin:0 auto;padding-block:18px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.view[hidden]{display:none}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}
+.lib{display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px}
+@media (max-width:860px){.grid,.lib{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+h2{font-size:13px;margin:0 0 8px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+textarea,input[type=text],input[type=password],select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea:focus,input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+.btn{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--accent)} .btn:disabled{opacity:.5;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.danger{color:var(--danger)} .btn.sm{padding:2px 8px;font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.hint{color:var(--muted);font-size:13px}
+.sentence{font:19px/2 var(--f-en);padding:10px 12px;border-radius:10px;background:var(--bg);min-height:56px;white-space:pre-wrap;overflow-wrap:anywhere}
+.sentence mark{background:var(--hl);color:inherit;border-bottom:2px solid var(--hl-line);border-radius:3px;padding:0 1px;cursor:pointer}
+.sentence mark.active{outline:2px solid var(--accent)}
+.trans{margin-top:8px;font-size:15px;white-space:pre-wrap}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--panel)}
+.cards{display:flex;flex-direction:column;gap:14px}
+.ctitle{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}
+.ctitle b{font:600 19px/1.35 var(--f-en)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.chip{font-size:12px;padding:1px 8px;border-radius:99px;background:var(--accent-weak);color:var(--accent)}
+.chip.trig{background:var(--bg);color:var(--muted);border:1px dashed var(--line)}
+.step{border-left:3px solid var(--accent-weak);padding:2px 0 2px 12px;margin:10px 0}
+.step .zh{color:var(--muted);font-size:14px}
+.en{display:flex;gap:4px;align-items:baseline}
+.en .t{flex:1;min-width:0;font:16px/1.55 var(--f-en)}
+.en ins{text-decoration:none;background:var(--add);color:var(--add-ink);border-radius:3px;padding:0 2px}
+.en del{text-decoration:none;background:var(--miss);border-radius:3px;padding:0 2px}
+.ulist{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:12px}
+.usage>.uf{font:600 16px/1.4 var(--f-en);display:flex;gap:2px 8px;flex-wrap:wrap;align-items:baseline}
+.usage>.uf::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);align-self:center}
+.uz{font:400 13px/1.5 var(--f-ui);color:var(--muted)}
+.exl{margin:4px 0 0;padding-left:24px}
+.exl li{margin:4px 0}
+.exl li::marker{color:var(--muted)}
+.exz{font-size:13px;color:var(--muted)}
+#edUsages{display:flex;flex-direction:column;gap:10px}
+.ublock{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.uhead,.exs li{display:grid;grid-template-columns:14px minmax(0,1.3fr) minmax(0,1fr) auto;gap:6px;align-items:center;width:100%}
+.exs{list-style:none;margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:6px;width:100%}
+.bul{color:var(--accent);text-align:center} .exs .bul{color:var(--muted)}
+.uform{font-weight:600;font-family:var(--f-en)!important} .exen{font-family:var(--f-en)!important}
+.zhin.auto{color:var(--muted)}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;padding:4px}
+.x:hover{color:var(--danger)}
+.addex{margin-left:38px}
+@media (max-width:560px){.uhead,.exs li{grid-template-columns:14px minmax(0,1fr) auto}.uhead .uzh,.exs li .exzh{grid-column:2/3}}
+.lk{border-bottom:1.5px dotted var(--accent);cursor:pointer;border-radius:2px}
+.lk:hover{background:var(--accent-weak)}
+.spk{border:0;background:none;cursor:pointer;color:var(--muted);padding:0 4px;font-size:13px}
+.spk:hover{color:var(--accent)}
+.note{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:14px;white-space:pre-wrap;margin-top:8px}
+.src{font:14px/1.6 var(--f-en);color:var(--muted);margin:4px 0;padding-left:10px;border-left:2px solid var(--line)}
+.src mark{background:var(--hl);color:var(--ink)}
+.list{max-height:68vh;overflow:auto;margin-top:10px}
+.item{padding:7px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.item:hover{background:var(--bg)} .item.on{border-color:var(--accent);background:var(--accent-weak)}
+.item .n{font-family:var(--f-en)}
+.item .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist{font:14px var(--f-en);padding:5px 8px;border-radius:6px;cursor:pointer;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist:hover{background:var(--bg);color:var(--ink)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);width:min(760px,94vw);padding:18px;max-height:92vh;overflow:auto}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog label,.form label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.empty{color:var(--muted);text-align:center;padding:28px 10px}
+.prac-zh{font-size:22px;margin:8px 0 12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:14px;z-index:30}
+ul.hint{padding-left:18px}
+/* touch screens (iPad/phone): 16px fields stop Safari from zooming on focus; larger tap targets */
+@media (pointer:coarse){textarea,input[type=text],input[type=password],select{font-size:16px}.btn{min-height:38px}.x,.spk{min-width:36px;min-height:36px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header><div class="hbar">
+  <h1>短句拆解本</h1>
+  <nav id="nav">
+    <button type="button" data-view="analyze" class="on">拆解长句</button>
+    <button type="button" data-view="library">短句库</button>
+    <button type="button" data-view="practice">练习</button>
+    <button type="button" data-view="data">数据</button>
+  </nav>
+  <button type="button" class="sync" id="sync" title="同步设置">读取中…</button>
+</div></header>
+
+<main>
+<section class="view" id="v-analyze">
+  <div class="grid">
+    <div class="stack">
+      <div class="panel">
+        <h2>粘贴一个长句</h2>
+        <textarea id="longInput" rows="3" placeholder="Thank you for your reminder regarding the revision of our manuscript, which we will submit by Friday."></textarea>
+        <div class="row">
+          <button type="button" class="btn primary" id="analyzeBtn">拆解 · 查找已整理的短句</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>句子 · 黄色是整理过的短句，点击查看；选中一段文字可整理成新短句</h2>
+        <div class="sentence" id="sentenceView"><span class="hint">在上方粘贴句子后点击「拆解」</span></div>
+        <div class="row edit-only"><button type="button" class="btn primary" id="selBtn" hidden></button></div>
+        <div class="row" id="matchSummary"></div>
+      </div>
+      <div class="panel">
+        <h2>最近拆解过的长句</h2>
+        <div id="histList"><div class="hint">暂无</div></div>
+      </div>
+    </div>
+    <div id="analyzeSide" class="cards"><div class="empty">点击句子里的黄色部分<br>这里会显示你以前整理的例句阶梯</div></div>
+  </div>
+</section>
+
+<section class="view" id="v-library" hidden>
+  <div class="lib">
+    <div class="panel">
+      <input type="text" id="libSearch" placeholder="搜索英文 / 中文 / 标签">
+      <div class="row edit-only"><button type="button" class="btn primary" id="newBtn">＋ 新建短句</button></div>
+      <div class="list" id="libList"></div>
+    </div>
+    <div id="libDetail" class="cards"><div class="empty">选择左侧的一个短句</div></div>
+  </div>
+</section>
+
+<section class="view" id="v-practice" hidden>
+  <div class="panel" style="max-width:720px;margin:0 auto">
+    <div class="row" style="margin-top:0">
+      <span class="hint">范围</span>
+      <select id="pracScope" style="width:auto;max-width:60%"></select>
+      <button type="button" class="btn" id="pracNext">换一题</button>
+    </div>
+    <div id="pracBox"></div>
+  </div>
+</section>
+
+<section class="view" id="v-data" hidden>
+  <div class="panel" style="max-width:720px;margin:0 auto">
+    <h2>GitHub 同步</h2>
+    <p class="hint">短句保存在你 GitHub 私有仓库里的 phrases.json。每台设备第一次打开时填一次下面的信息，之后自动同步。没网时也能用：修改先存在这台设备上，联网后自动上传。</p>
+    <p id="ghState" style="margin:8px 0 0"></p>
+    <form class="form" id="ghForm" autocomplete="off">
+      <label for="ghOwner">GitHub 用户名</label>
+      <input type="text" id="ghOwner" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your-name">
+      <label for="ghRepo">数据仓库名（私有仓库）</label>
+      <input type="text" id="ghRepo" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="phrase-data">
+      <label for="ghToken">访问令牌（只保存在这台设备上）</label>
+      <input type="password" id="ghToken" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="github_pat_…">
+      <div class="row">
+        <button type="submit" class="btn primary">连接并同步</button>
+        <button type="button" class="btn" id="ghSyncNow">立即同步</button>
+        <button type="button" class="btn danger" id="ghOff">在这台设备上断开</button>
+      </div>
+    </form>
+    <div>
+      <h2 style="margin-top:18px">备份 / 迁移</h2>
+      <p class="hint">平时不需要手动备份：GitHub 会保留每一次修改的历史。导入会和现有数据合并，同一条短句以较新的版本为准。</p>
+      <div class="row">
+        <button type="button" class="btn" id="exportBtn">导出备份 (.json)</button>
+        <label class="btn">导入备份<input type="file" id="importFile" accept=".json,application/json" hidden></label>
+      </div>
+    </div>
+    <h2 style="margin-top:18px">触发词写法（决定长句里哪些部分会被识别）</h2>
+    <ul class="hint">
+      <li><b>thank you for</b>：普通词组，不分大小写</li>
+      <li><b>remind*</b>：词尾通配，可匹配 remind / reminder / reminding</li>
+      <li><b>not only ... but also</b>：中间可以隔几个词（限同一句）</li>
+      <li>每行写一条；不写时默认用标题</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<dialog id="editor">
+  <form id="edForm">
+    <h2 id="edHead" style="font-size:17px;color:var(--ink)">整理短句</h2>
+    <label for="edTitle">核心短句（标题）</label>
+    <input type="text" id="edTitle" placeholder="Thank you for ...">
+    <label for="edTrig">触发词（每行一条，用来在长句里自动识别）</label>
+    <textarea id="edTrig" rows="2"></textarea>
+    <label>用法和例句：每个用法下写几句例句，从简单到复杂。在例句里按 Enter 会新增下一句。</label>
+    <div id="edUsages"></div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="btn sm" id="addUsage">＋ 用法</button>
+    </div>
+    <div id="edSrcWrap"></div>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" class="btn danger" id="edDel">删除</button>
+      <span><button type="button" class="btn" id="edCancel">取消</button> <button type="submit" class="btn primary" id="edSave">保存</button></span>
+    </div>
+  </form>
+</dialog>
+
+
+<dialog id="confirmDlg" style="width:min(420px,92vw)">
+  <p id="confirmMsg" style="margin-top:0"></p>
+  <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="cNo">取消</button><button type="button" class="btn primary" id="cYes">确定</button></div>
+</dialog>
+
+<script>
+/* ---------- state ---------- */
+const S = { patterns: [], history: [], deleted: {}, ready: false, editable: true };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const now = () => new Date().toISOString();
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const clean = s => String(s ?? '').replace(/[\s　]+/g, ' ').trim();
+const isZh = l => /[㐀-鿿]/.test(l) && !/^[A-Za-z"'(]/.test(l);
+const getP = id => S.patterns.find(p => p.id === id);
+function toast(msg){ const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); }
+function ask(msg){ return new Promise(res => { $('#confirmMsg').textContent = msg; const d = $('#confirmDlg'); d.showModal();
+  $('#cYes').onclick = () => { d.close(); res(true); }; $('#cNo').onclick = () => { d.close(); res(false); }; }); }
+function setSync(text, cls){ const s = $('#sync'); s.textContent = text; s.className = 'sync ' + (cls || ''); }
+
+/* ---------- parsing ---------- */
+/* phrase = { title, triggers, usages: [{ form, zh, ex: [{ en, zh }] }], sources }
+   older records kept examples in `steps: [{ zh, en: [] }]`; read them as one usage */
+function normalize(p){
+  if (!Array.isArray(p.usages)){
+    const ex = (p.steps || []).flatMap(s => (s.en || []).map(en => ({ en, zh: s.zh || '' })));
+    p.usages = ex.length ? [{ form: '', zh: '', ex }] : [];
+  }
+  p.usages = p.usages.map(u => ({ form: u.form || '', zh: u.zh || '', ex: (u.ex || []).filter(x => x && x.en).map(x => ({ en: x.en, zh: x.zh || '' })) }));
+  return p;
+}
+
+/* word diff: mark words in cur that prev lacks */
+const norm = w => w.toLowerCase().replace(/^[^\w']+|[^\w']+$/g, '');
+/* indices of tokens in cur that are "added" relative to prev */
+function addedSet(prev, cur){
+  const b = cur.split(' '), bn = b.map(norm), out = new Set();
+  if (!prev) return out;
+  const a = prev.split(' ').map(norm);
+  const m = a.length, n = b.length, L = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) for (let j = n - 1; j >= 0; j--) L[i][j] = a[i] === bn[j] ? L[i+1][j+1] + 1 : Math.max(L[i+1][j], L[i][j+1]);
+  const keep = new Set(); let i = 0, j = 0;
+  while (i < m && j < n){ if (a[i] === bn[j]){ keep.add(j); i++; j++; } else if (L[i+1][j] >= L[i][j+1]) i++; else j++; }
+  bn.forEach((w, k) => { if (!keep.has(k) && w) out.add(k); });
+  return out;
+}
+function tokensHTML(toks, from, to, added, tag){
+  let out = '', run = [];
+  const flush = () => { if (run.length){ out += `<${tag}>${esc(run.join(' '))}</${tag}> `; run = []; } };
+  for (let k = from; k < to; k++){ if (added.has(k)) run.push(toks[k]); else { flush(); out += esc(toks[k]) + ' '; } }
+  flush(); return out.trim();
+}
+function diffHTML(prev, cur, tag = 'ins'){ const t = cur.split(' '); return tokensHTML(t, 0, t.length, addedSet(prev, cur), tag); }
+
+/* example line: diff marks + clickable links to OTHER phrases in the bank */
+function richLine(prev, cur, selfId){
+  const toks = cur.split(' '), added = addedSet(prev, cur);
+  const starts = []; let off = 0; for (const t of toks){ starts.push(off); off += t.length + 1; }
+  const spanOf = new Array(toks.length).fill(null); let pos = 0;
+  for (const s of findMatches(cur)){
+    if (s.start < pos) continue;
+    const ids = [...s.ids].filter(x => x !== selfId); if (!ids.length) continue;
+    pos = s.end; const sp = { ids };
+    toks.forEach((t, k) => { if (starts[k] < s.end && starts[k] + t.length > s.start) spanOf[k] = spanOf[k] || sp; });
+  }
+  let out = '', i = 0;
+  while (i < toks.length){
+    const sp = spanOf[i];
+    if (sp){ let j = i; while (j < toks.length && spanOf[j] === sp) j++;
+      out += `<span class="lk" data-goto="${sp.ids.join(',')}" title="${esc(sp.ids.map(id => getP(id)?.title).join(' / '))}">${tokensHTML(toks, i, j, added, 'ins')}</span> `; i = j; }
+    else { let j = i; while (j < toks.length && !spanOf[j]) j++; out += tokensHTML(toks, i, j, added, 'ins') + ' '; i = j; }
+  }
+  return out.trim();
+}
+
+/* triggers */
+function triggerRegex(t){
+  t = clean(t); if (!t) return null;
+  const parts = t.split(/\s*(?:\.\.\.|…)\s*/).map(p => p.split(' ').filter(Boolean).map(w => {
+    const suf = /\*$/.test(w); w = w.replace(/\*+$/, '');
+    return w ? escRe(w) + (suf ? "[\\w'-]*" : '') : '';
+  }).filter(Boolean).join('\\s+')).filter(Boolean);
+  if (!parts.length) return null;
+  try { return new RegExp('(?<![\\w])' + parts.join('[^.!?;。]{0,80}?') + '(?![\\w])', 'gi'); } catch(e){ return null; }
+}
+const triggersOf = p => (p.triggers && p.triggers.length ? p.triggers : [p.title]);
+function eachMatch(text, p, fn){
+  for (const t of triggersOf(p)){ const re = triggerRegex(t); if (!re) continue;
+    let m; while ((m = re.exec(text))){ if (!m[0].length){ re.lastIndex++; continue; } fn(m.index, m.index + m[0].length); } }
+}
+function findMatches(text){
+  const spans = new Map();
+  for (const p of S.patterns) eachMatch(text, p, (s, e) => { const k = s + ':' + e; if (!spans.has(k)) spans.set(k, { start: s, end: e, ids: new Set() }); spans.get(k).ids.add(p.id); });
+  return [...spans.values()].sort((x, y) => x.start - y.start || (y.end - y.start) - (x.end - x.start));
+}
+function highlightIn(text, p){
+  const ms = []; eachMatch(text, p, (s, e) => ms.push([s, e])); ms.sort((a, b) => a[0] - b[0]);
+  let out = '', pos = 0;
+  for (const [s, e] of ms){ if (s < pos) continue; out += esc(text.slice(pos, s)) + '<mark>' + esc(text.slice(s, e)) + '</mark>'; pos = e; }
+  return out + esc(text.slice(pos));
+}
+function speak(text){ try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = 0.9; speechSynthesis.speak(u); } catch(e){} }
+
+/* ---------- storage: one JSON file (phrases.json) in the user's private GitHub repo ----------
+   Every change is written to localStorage first, then pushed after a short pause.
+   Deleted phrases leave a tombstone in `deleted` so another device's copy can't bring them back.
+   On a write conflict (another device saved first) the two copies are merged per phrase, newer wins. */
+const LS = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e){ return false; } },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+const CFG_KEY = 'cn.github', CACHE_KEY = 'cn.cache', FILE = 'phrases.json';
+let GH = LS.get(CFG_KEY);            // { owner, repo, token }
+let sha = null, etag = null, dirty = false, rev = 0, busy = false, again = false, pushTimer = null, lastErr = '';
+
+function saveCache(){
+  if (!LS.set(CACHE_KEY, { patterns: S.patterns, deleted: S.deleted, history: S.history, dirty, sha })) toast('这台设备的存储空间不足');
+}
+function loadCache(){
+  const c = LS.get(CACHE_KEY); if (!c) return;
+  S.patterns = (c.patterns || []).map(normalize); S.deleted = c.deleted || {}; S.history = c.history || [];
+  dirty = !!c.dirty; sha = c.sha || null;
+}
+const b64e = str => { const b = new TextEncoder().encode(str); let o = ''; for (let i = 0; i < b.length; i += 0x8000) o += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(o); };
+const b64d = str => new TextDecoder().decode(Uint8Array.from(atob(str.replace(/\s/g, '')), c => c.charCodeAt(0)));
+
+const repoURL = () => `${GH.api || 'https://api.github.com'}/repos/${encodeURIComponent(GH.owner)}/${encodeURIComponent(GH.repo)}`;
+function gh(path, method = 'GET', body = null, headers = {}){
+  return fetch(repoURL() + path, { method, cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + GH.token, Accept: 'application/vnd.github+json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers },
+    body: body ? JSON.stringify(body) : undefined });
+}
+function httpErr(r){
+  const msg = { 401: '令牌无效或已过期', 403: '令牌没有这个仓库的读写权限', 404: '找不到这个仓库，或令牌没有访问它的权限' }[r.status] || `GitHub 返回错误 ${r.status}`;
+  return { msg };
+}
+async function pull(){
+  const r = await gh('/contents/' + FILE, 'GET', null, etag ? { 'If-None-Match': etag } : {});
+  if (r.status === 304) return null;
+  if (r.status === 404){
+    const repo = await gh('');                      // is it the file or the whole repo that's missing?
+    if (!repo.ok) throw httpErr(repo);
+    sha = null; etag = null;
+    return { patterns: [], deleted: {}, history: [], missing: true };
+  }
+  if (!r.ok) throw httpErr(r);
+  const j = await r.json();
+  let text = j.content ? b64d(j.content) : '';
+  if (!text && j.size){                             // over 1 MB the API leaves content empty
+    const raw = await gh('/contents/' + FILE, 'GET', null, { Accept: 'application/vnd.github.raw+json' });
+    if (!raw.ok) throw httpErr(raw);
+    text = await raw.text();
+  }
+  sha = j.sha; etag = r.headers.get('ETag');
+  let d = {};
+  try { d = text ? JSON.parse(text) : {}; } catch(e){ throw { msg: 'phrases.json 的格式坏了，请在 GitHub 上恢复上一个版本' }; }
+  return { patterns: (d.patterns || []).map(normalize), deleted: d.deleted || {}, history: d.history || [] };
+}
+function merge(a, b){
+  const deleted = { ...(b.deleted || {}) };
+  for (const [id, t] of Object.entries(a.deleted || {})) if (!deleted[id] || deleted[id] < t) deleted[id] = t;
+  const map = new Map();
+  for (const p of [...b.patterns, ...a.patterns]){ const o = map.get(p.id); if (!o || String(p.updated) > String(o.updated)) map.set(p.id, p); }
+  const patterns = [...map.values()].filter(p => !(deleted[p.id] && deleted[p.id] >= String(p.updated)));
+  const seen = new Set();
+  const history = [...a.history, ...b.history].filter(h => h && h.text)
+    .sort((x, y) => String(y.time).localeCompare(String(x.time)))
+    .filter(h => !seen.has(h.text) && seen.add(h.text)).slice(0, 30);
+  return { patterns, deleted, history };
+}
+function badge(){
+  if (!GH?.token) return setSync('只存在本机 · 点此设置同步', 'bad');
+  if (lastErr) return setSync(dirty ? '未同步 · 点此查看' : '同步出错 · 点此查看', 'bad');
+  setSync(dirty ? '等待同步…' : '已同步', dirty ? '' : 'ok');
+}
+async function sync(){
+  if (!GH?.token) return badge();
+  if (busy){ again = true; return; }
+  busy = true; clearTimeout(pushTimer); setSync('同步中…');
+  try {
+    for (let tries = 0; ; tries++){
+      const remote = await pull();
+      if (remote){
+        const m = dirty ? merge({ patterns: S.patterns, deleted: S.deleted, history: S.history }, remote) : remote;
+        const changed = JSON.stringify(m.patterns) !== JSON.stringify(S.patterns);
+        const histChanged = JSON.stringify(m.history) !== JSON.stringify(S.history);
+        S.patterns = m.patterns; S.deleted = m.deleted; S.history = m.history;
+        if (remote.missing && (S.patterns.length || S.history.length)){ dirty = true; rev++; }
+        saveCache();
+        if (changed) refreshAll();
+        if (histChanged) renderHist();
+      }
+      if (!dirty) break;
+      const at = rev;
+      const file = JSON.stringify({ app: 'chunk-notebook', version: 1, updated: now(), patterns: S.patterns, deleted: S.deleted, history: S.history }, null, 1);
+      const body = { message: '更新短句 ' + new Date().toLocaleString('zh-CN'), content: b64e(file) };
+      if (sha) body.sha = sha;
+      const r = await gh('/contents/' + FILE, 'PUT', body);
+      if ((r.status === 409 || r.status === 422) && tries < 3){ etag = null; continue; }   // someone saved first: re-read, merge, retry
+      if (!r.ok) throw httpErr(r);
+      sha = (await r.json()).content.sha; etag = null;
+      if (rev === at) dirty = false;
+      saveCache();
+      break;
+    }
+    lastErr = '';
+  } catch(e){
+    lastErr = e.msg || '连不上 GitHub，联网后会自动重试';
+  } finally {
+    busy = false; badge(); renderGhState();
+    if (again){ again = false; pushTimer = setTimeout(sync, 300); }
+    else if (dirty && !lastErr) pushTimer = setTimeout(sync, 1500);
+  }
+}
+function changed(){
+  rev++; dirty = true; saveCache(); badge();
+  if (GH?.token){ clearTimeout(pushTimer); pushTimer = setTimeout(sync, 1500); }
+}
+async function savePattern(p){
+  const i = S.patterns.findIndex(x => x.id === p.id);
+  if (i >= 0) S.patterns[i] = p; else S.patterns.push(p);
+  delete S.deleted[p.id];
+  changed(); return true;
+}
+async function deletePattern(id){ S.patterns = S.patterns.filter(x => x.id !== id); S.deleted[id] = now(); changed(); }
+async function saveHistory(){ changed(); }
+
+/* ---------- sync settings (数据 view) ---------- */
+function renderGhState(){
+  const el = $('#ghState'); if (!el) return;
+  if (GH?.token){
+    el.innerHTML = `<b>已连接</b> ${esc(GH.owner)}/${esc(GH.repo)}` + (lastErr ? ` · <span style="color:var(--danger)">${esc(lastErr)}</span>` : (dirty ? ' · 有修改等待上传' : ' · 已是最新'));
+    $('#ghToken').placeholder = '已保存（重新输入可替换）';
+  } else {
+    el.innerHTML = '<span style="color:var(--danger)">还没有连接 GitHub。</span>现在的修改只存在这台设备上。';
+    $('#ghToken').placeholder = 'github_pat_…';
+  }
+  if (document.activeElement !== $('#ghOwner')) $('#ghOwner').value = GH?.owner || 'zhengxr566';
+  if (document.activeElement !== $('#ghRepo')) $('#ghRepo').value = GH?.repo || 'phrase-data';
+  $('#ghSyncNow').hidden = $('#ghOff').hidden = !GH?.token;
+}
+$('#ghForm').onsubmit = async e => {
+  e.preventDefault();
+  const owner = clean($('#ghOwner').value), repo = clean($('#ghRepo').value) || 'phrase-data';
+  const token = $('#ghToken').value.trim() || GH?.token;
+  if (!owner || !token){ toast('请填写 GitHub 用户名和访问令牌'); return; }
+  const moved = !GH || GH.owner !== owner || GH.repo !== repo;
+  GH = { ...(GH || {}), owner, repo, token };
+  LS.set(CFG_KEY, GH);
+  $('#ghToken').value = '';
+  if (moved){ sha = null; etag = null; if (S.patterns.length || S.history.length){ dirty = true; rev++; } }
+  await sync();
+  toast(lastErr ? lastErr : '已连接，开始同步');
+};
+$('#ghSyncNow').onclick = async () => { etag = null; await sync(); toast(lastErr || '已同步'); };
+$('#ghOff').onclick = async () => {
+  if (!(await ask('在这台设备上断开 GitHub？这台设备会忘记令牌，已经上传的短句不受影响。'))) return;
+  GH = null; LS.del(CFG_KEY); lastErr = ''; badge(); renderGhState();
+};
+
+/* ---------- card ---------- */
+function cardHTML(p, opts = {}){
+  let html = (p.usages || []).map(u => {
+    let prev = '';
+    const exs = u.ex.map(x => { const h = `<li><div class="en"><span class="t">${richLine(prev, x.en, p.id)}</span><button type="button" class="spk" data-speak="${esc(x.en)}" aria-label="朗读">▶</button></div>${x.zh ? `<div class="exz">${esc(x.zh)}</div>` : ''}</li>`; prev = x.en; return h; }).join('');
+    const head = u.form ? `<div class="uf">${esc(u.form)}${u.zh ? ` <span class="uz">${esc(u.zh)}</span>` : ''}</div>` : (u.zh ? `<div class="uz">${esc(u.zh)}</div>` : '');
+    return `<li class="usage">${head}${exs ? `<ul class="exl">${exs}</ul>` : ''}</li>`;
+  }).join('');
+  html = html ? `<ul class="ulist">${html}</ul>` : '';
+  const srcs = (p.sources || []).slice(-5).reverse().map(s => `<div class="src">${highlightIn(s, p)}</div>`).join('');
+  return `<div class="card" data-card="${p.id}">
+    <div class="ctitle"><b>${esc(p.title)}</b>
+      <span>${opts.addSource && currentSentence && !(p.sources || []).includes(currentSentence) ? `<button type="button" class="btn sm edit-only" data-addsrc="${p.id}">记录出处</button> ` : ''}
+      <button type="button" class="btn sm" data-practice="${p.id}">练习</button> <button type="button" class="btn sm edit-only" data-edit="${p.id}">编辑</button></span></div>
+    <div class="chips">${triggersOf(p).map(t => `<span class="chip trig">${esc(t)}</span>`).join('')}</div>
+    ${html || '<div class="hint">还没有例句</div>'}
+    ${srcs ? `<div style="margin-top:10px"><div class="hint">在这些长句里遇到过：</div>${srcs}</div>` : ''}
+  </div>`;
+}
+
+/* ---------- analyze ---------- */
+let currentSentence = '', selText = '', activeIds = null;
+function analyze(text, addHist = true){
+  text = clean(text); currentSentence = text; selText = ''; $('#selBtn').hidden = true;
+  if (!text){ $('#sentenceView').innerHTML = '<span class="hint">在上方粘贴句子后点击「拆解」</span>'; $('#matchSummary').innerHTML = ''; return; }
+  const spans = findMatches(text);
+  let out = '', pos = 0;
+  for (const s of spans){ if (s.start < pos) continue; out += esc(text.slice(pos, s.start)) + `<mark data-ids="${[...s.ids].join(',')}">${esc(text.slice(s.start, s.end))}</mark>`; pos = s.end; }
+  $('#sentenceView').innerHTML = out + esc(text.slice(pos));
+  const all = [...new Set(spans.flatMap(s => [...s.ids]))];
+  $('#matchSummary').innerHTML = all.length
+    ? `<span class="hint">找到 ${all.length} 个：</span>` + all.map(id => `<button type="button" class="btn sm" data-jump="${id}">${esc(getP(id).title)}</button>`).join('')
+    : '<span class="hint">还没有整理过这句里的短句。选中一段文字，把它整理成新短句。</span>';
+  const ids = activeIds && activeIds.every(getP) ? activeIds : all;
+  $('#analyzeSide').innerHTML = ids.length ? ids.map(id => cardHTML(getP(id), { addSource: true })).join('') : '<div class="empty">这句里还没有你整理过的短句</div>';
+  if (addHist && S.editable){
+    S.history = [{ text, time: now() }, ...S.history.filter(h => h.text !== text)].slice(0, 30);
+    renderHist(); saveHistory();
+  }
+}
+function renderHist(){
+  $('#histList').innerHTML = S.history.length ? S.history.map((h, i) => `<div class="hist" data-hist="${i}" title="${esc(h.text)}">${esc(h.text)}</div>`).join('') : '<div class="hint">暂无</div>';
+}
+$('#analyzeBtn').onclick = () => { activeIds = null; analyze($('#longInput').value); };
+$('#longInput').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); activeIds = null; analyze($('#longInput').value); } });
+
+document.addEventListener('selectionchange', () => {
+  const sel = document.getSelection(); if (!sel || !sel.rangeCount) return;
+  const t = clean(sel.toString());
+  if (t && currentSentence && $('#sentenceView').contains(sel.anchorNode)){
+    selText = t; const b = $('#selBtn'); b.hidden = false;
+    b.textContent = `＋ 把「${t.length > 40 ? t.slice(0, 40) + '…' : t}」整理为新短句`;
+  }
+});
+$('#selBtn').onclick = () => {
+  if (!selText) return;
+  const ex = S.patterns.find(p => p.title.toLowerCase() === selText.toLowerCase());
+  if (ex) return openEditor(ex, { source: currentSentence });
+  openEditor(null, { title: selText, triggers: [selText.replace(/[.,;:!?]+$/, '')], source: currentSentence, usages: [{ form: selText, zh: '', ex: [] }] });
+};
+
+
+
+/* ---------- editor: bullet list of usages, each with example sentences ---------- */
+const edU = $('#edUsages');
+function exEl(x = {}){
+  const li = document.createElement('li');
+  li.innerHTML = '<span class="bul">–</span><input type="text" class="exen" placeholder="英文例句" aria-label="英文例句"><input type="text" class="exzh zhin" placeholder="中文" aria-label="中文"><button type="button" class="x" data-rmx aria-label="删除这个例句">×</button>';
+  li.querySelector('.exen').value = x.en || ''; li.querySelector('.exzh').value = x.zh || '';
+  return li;
+}
+function usageEl(u = {}){
+  const d = document.createElement('div'); d.className = 'ublock';
+  d.innerHTML = '<div class="uhead"><span class="bul">●</span><input type="text" class="uform" placeholder="用法，例如 thank you for doing sth" aria-label="用法"><input type="text" class="uzh zhin" placeholder="中文说明" aria-label="用法的中文说明"><button type="button" class="x" data-rmu aria-label="删除这个用法">×</button></div><ul class="exs"></ul><button type="button" class="btn sm addex">＋ 例句</button>';
+  d.querySelector('.uform').value = u.form || ''; d.querySelector('.uzh').value = u.zh || '';
+  const ul = d.querySelector('.exs'); ((u.ex && u.ex.length) ? u.ex : [{}]).forEach(x => ul.append(exEl(x)));
+  return d;
+}
+function readUsages(){
+  return [...edU.querySelectorAll('.ublock')].map(b => ({
+    form: clean(b.querySelector('.uform').value), zh: clean(b.querySelector('.uzh').value),
+    ex: [...b.querySelectorAll('.exs li')].map(li => ({ en: clean(li.querySelector('.exen').value), zh: clean(li.querySelector('.exzh').value) })).filter(x => x.en)
+  })).filter(u => u.form || u.ex.length);
+}
+$('#addUsage').onclick = () => { const b = usageEl(); edU.append(b); b.querySelector('.uform').focus(); };
+edU.addEventListener('click', e => {
+  const t = e.target;
+  if (t.classList.contains('addex')){ const li = exEl(); t.previousElementSibling.append(li); li.querySelector('.exen').focus(); }
+  else if (t.dataset.rmx !== undefined){ const ul = t.closest('ul'); if (ul.children.length > 1) t.closest('li').remove(); else t.closest('li').querySelectorAll('input').forEach(i => i.value = ''); }
+  else if (t.dataset.rmu !== undefined){ t.closest('.ublock').remove(); if (!edU.children.length) edU.append(usageEl()); }
+});
+edU.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.isComposing) return;
+  e.preventDefault();
+  const t = e.target;
+  if (t.classList.contains('exen') || t.classList.contains('exzh')){ const li = exEl(); t.closest('li').after(li); li.querySelector('.exen').focus(); }
+  else t.closest('.ublock')?.querySelector('.exen')?.focus();
+});
+$('#edTitle').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing){ e.preventDefault(); edU.querySelector('.uform')?.focus(); } });
+
+
+/* ---------- library ---------- */
+let selectedId = null;
+function renderLib(){
+  const q = clean($('#libSearch').value).toLowerCase();
+  const list = S.patterns.filter(p => !q || JSON.stringify([p.title, p.triggers, p.usages]).toLowerCase().includes(q))
+    .sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+  const sub = p => (p.usages || []).map(u => u.form || u.zh).filter(Boolean).join(' · ') || (p.usages?.[0]?.ex[0]?.en || '');
+  $('#libList').innerHTML = !S.ready ? '<div class="empty">正在读取…</div>' : list.length
+    ? list.map(p => `<div class="item ${p.id === selectedId ? 'on' : ''}" data-select="${p.id}" tabindex="0"><div class="n">${esc(p.title)}</div><div class="s">${esc(sub(p))}</div></div>`).join('')
+    : `<div class="empty">${q ? '没有结果' : '还没有短句。点「＋ 新建短句」，或在「拆解长句」里选中文字来整理。'}</div>`;
+  const p = getP(selectedId);
+  $('#libDetail').innerHTML = p ? cardHTML(p) : '<div class="empty">选择左侧的一个短句</div>';
+}
+$('#libSearch').oninput = renderLib;
+$('#newBtn').onclick = () => openEditor(null, {});
+
+const ed = $('#editor'); let edCtx = null;
+function openEditor(p, o = {}){
+  edCtx = { id: p?.id || null, source: o.source || null };
+  $('#edHead').textContent = p ? '编辑短句' : '整理新短句';
+  $('#edTitle').value = p?.title ?? o.title ?? '';
+  $('#edTrig').value = (p?.triggers ?? o.triggers ?? []).join('\n');
+  const us = p ? normalize(JSON.parse(JSON.stringify(p))).usages : (o.usages || []);
+  edU.innerHTML = ''; (us.length ? us : [{}]).forEach(u => edU.append(usageEl(u)));
+  $('#edDel').style.visibility = p ? 'visible' : 'hidden';
+  $('#edSrcWrap').innerHTML = edCtx.source ? `<label>出处（保存时记录）</label><div class="src">${esc(edCtx.source)}</div>` : '';
+  ed.showModal();
+}
+$('#edCancel').onclick = () => ed.close();
+$('#edForm').onsubmit = async e => {
+  e.preventDefault();
+  const title = clean($('#edTitle').value);
+  if (!title){ toast('请填写核心短句'); $('#edTitle').focus(); return; }
+  const old = getP(edCtx.id);
+  const p = {
+    ...(old ? JSON.parse(JSON.stringify(old)) : { id: uid(), created: now(), sources: [] }),
+    title, triggers: $('#edTrig').value.split('\n').map(clean).filter(Boolean),
+    usages: readUsages(), updated: now()
+  };
+  delete p.steps; delete p.tags; delete p.note;
+  p.sources = p.sources || [];
+  if (edCtx.source && !p.sources.includes(edCtx.source)) p.sources.push(edCtx.source);
+  $('#edSave').disabled = true;
+  const ok = await savePattern(p);
+  $('#edSave').disabled = false;
+  if (ok){ selectedId = p.id; upsertLocal(p); ed.close(); toast('已保存'); }
+};
+$('#edDel').onclick = async () => {
+  const p = getP(edCtx.id); if (!p) return;
+  ed.close();
+  if (!(await ask(`删除「${p.title}」？（GitHub 的修改历史里还能找回）`))) return ed.showModal();
+  await deletePattern(p.id); S.patterns = S.patterns.filter(x => x.id !== p.id); selectedId = null; refreshAll(); toast('已删除');
+};
+function upsertLocal(p){ const i = S.patterns.findIndex(x => x.id === p.id); if (i >= 0) S.patterns[i] = p; else S.patterns.push(p); refreshAll(); }
+
+/* ---------- practice ---------- */
+let prac = null;
+function renderScope(){
+  const sel = $('#pracScope'), cur = sel.value;
+  sel.innerHTML = '<option value="">全部短句</option>' + S.patterns.map(p => `<option value="${p.id}">${esc(p.title)}</option>`).join('');
+  sel.value = getP(cur) ? cur : '';
+}
+function nextPractice(){
+  const scope = $('#pracScope').value, pool = [];
+  for (const p of S.patterns) if (!scope || p.id === scope) for (const u of p.usages || []) for (const x of u.ex) if (x.zh && x.en) pool.push({ p, u, s: { zh: x.zh, en: [x.en] } });
+  if (!pool.length){ prac = null; $('#pracBox').innerHTML = '<div class="empty">还没有「中文＋英文」的例句可以练习</div>'; return; }
+  let pick; do { pick = pool[Math.floor(Math.random() * pool.length)]; } while (pool.length > 1 && prac && pick.s.zh === prac.s.zh);
+  prac = pick;
+  $('#pracBox').innerHTML = `<div class="hint" style="margin-top:14px">提示：<span style="font-family:var(--f-en)">${esc(pick.u.form || pick.p.title)}</span></div>
+    <div class="prac-zh">${esc(pick.s.zh)}</div>
+    <textarea id="pracIn" rows="2" placeholder="试着写出英文（可留空直接看答案）"></textarea>
+    <div class="row"><button type="button" class="btn primary" id="pracShow">看答案</button></div><div id="pracAns"></div>`;
+  $('#pracIn').onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); showAnswer(); } };
+  $('#pracShow').onclick = showAnswer;
+}
+function showAnswer(){
+  const mine = clean($('#pracIn').value);
+  $('#pracAns').innerHTML = `<div class="step">${prac.s.en.map(e => `<div class="en"><span class="t">${mine ? diffHTML(mine, e, 'del') : esc(e)}</span><button type="button" class="spk" data-speak="${esc(e)}" aria-label="朗读">▶</button></div>`).join('')}</div>
+    ${mine ? '<div class="hint">标红的是你没写到的词</div>' : ''}
+    <div class="row"><button type="button" class="btn" data-showlib="${prac.p.id}">查看这个短句</button><button type="button" class="btn primary" id="pracGo">下一题</button></div>`;
+  $('#pracGo').onclick = nextPractice;
+}
+$('#pracNext').onclick = nextPractice;
+$('#pracScope').onchange = nextPractice;
+
+
+/* ---------- backup ---------- */
+$('#exportBtn').onclick = async () => {
+  const data = JSON.stringify({ patterns: S.patterns, history: S.history, exported: now() }, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = `短句拆解本-备份-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  toast('已导出');
+};
+$('#importFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text()); if (!Array.isArray(d.patterns)) throw new Error();
+    let add = 0, upd = 0;
+    for (const raw of d.patterns){
+      if (!raw || !raw.title) continue;
+      const p = normalize({ id: /^[a-z0-9]+$/i.test(raw.id || '') ? raw.id : uid(), title: raw.title, triggers: raw.triggers || [],
+        usages: raw.usages, steps: raw.steps, sources: raw.sources || [], created: raw.created || now(), updated: raw.updated || now() });
+      delete p.steps;
+      const ex = getP(p.id);
+      if (ex && String(ex.updated) >= String(p.updated)) continue;
+      if (await savePattern(p)){ upsertLocal(p); ex ? upd++ : add++; }
+    }
+    if (Array.isArray(d.history)){ const seen = new Set(S.history.map(h => h.text)); S.history = [...S.history, ...d.history.filter(h => h && h.text && !seen.has(h.text))].slice(0, 30); renderHist(); saveHistory(); }
+    toast(`导入完成：新增 ${add}，更新 ${upd}`);
+  } catch(err){ toast('文件格式不对，请选择导出的 .json 备份'); }
+};
+
+/* ---------- global ---------- */
+function switchView(v){
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  document.querySelectorAll('.view').forEach(s => s.hidden = s.id !== 'v-' + v);
+  if (v === 'practice' && !prac) nextPractice();
+}
+document.querySelectorAll('#nav button').forEach(b => b.onclick = () => switchView(b.dataset.view));
+function refreshAll(){ renderLib(); renderScope(); if (currentSentence) analyze(currentSentence, false); }
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-speak],[data-edit],[data-select],[data-jump],[data-hist],[data-practice],[data-addsrc],[data-showlib],[data-goto],mark[data-ids]');
+  if (!t) return; const d = t.dataset;
+  if (d.speak) speak(d.speak);
+  else if (d.goto){
+    const ids = d.goto.split(',').filter(getP); if (!ids.length) return;
+    if (!$('#v-analyze').hidden){
+      const shown = [...document.querySelectorAll('#analyzeSide [data-card]')].map(c => c.dataset.card);
+      activeIds = [...new Set([...shown, ...ids])];
+      $('#analyzeSide').innerHTML = activeIds.map(id => cardHTML(getP(id), { addSource: true })).join('');
+    } else { selectedId = ids[0]; renderLib(); switchView('library'); }
+    document.querySelector(`[data-card="${ids[0]}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  else if (d.edit) openEditor(getP(d.edit));
+  else if (d.select){ selectedId = d.select; renderLib(); }
+  else if (d.showlib){ selectedId = d.showlib; renderLib(); switchView('library'); }
+  else if (d.jump){ activeIds = null; analyze(currentSentence, false); document.querySelector(`#analyzeSide [data-card="${d.jump}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  else if (d.hist !== undefined){ const h = S.history[+d.hist]; if (h){ $('#longInput').value = h.text; activeIds = null; analyze(h.text); } }
+  else if (d.practice){ switchView('practice'); $('#pracScope').value = d.practice; nextPractice(); }
+  else if (d.addsrc){ const p = getP(d.addsrc); if (p && currentSentence){ const c = JSON.parse(JSON.stringify(p)); c.sources = [...(c.sources || []), currentSentence]; c.updated = now(); savePattern(c).then(ok => { if (ok){ upsertLocal(c); toast('已记录出处'); } }); } }
+  else if (d.ids){
+    if (clean(document.getSelection()?.toString())) return;
+    document.querySelectorAll('#sentenceView mark').forEach(m => m.classList.toggle('active', m === t));
+    activeIds = d.ids.split(',');
+    $('#analyzeSide').innerHTML = activeIds.map(id => cardHTML(getP(id), { addSource: true })).join('');
+    if (innerWidth < 860) $('#analyzeSide').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset?.select){ selectedId = e.target.dataset.select; renderLib(); } });
+
+/* ---------- boot ---------- */
+$('#sync').onclick = () => switchView('data');
+loadCache();
+S.ready = true;
+refreshAll(); renderHist(); renderGhState(); badge();
+if (GH?.token) sync();
+else if (!S.patterns.length) switchView('data');
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+addEventListener('online', sync);
+setInterval(() => { if (!document.hidden && !$('#editor').open) sync(); }, 60000);
+</script>
+</body>
+</html>
